@@ -13,6 +13,7 @@ globalVariables(c(
   "Median", "Duration", "Results"
 ))
 
+med.events <- read.csv("med_events.csv")
 ExamplePats <- med.events
 tidy <- ExamplePats
 colnames(tidy) <- c("pnr", "eksd", "perday", "ATC", "dur_original")
