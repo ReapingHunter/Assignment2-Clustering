@@ -5,25 +5,32 @@ import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+import os
 
-np.random.seed(42)
+# np.random.seed(42)
 
-num_patients = 500
+# num_patients = 500
 
-# Simulated data
-df = pd.DataFrame({
-  "pnr": np.random.randint(1000, 1010, size=num_patients),  # Patient IDs
-  "eksd": pd.date_range(start="2020-01-01", periods=num_patients, freq="D"),  # Prescription dates
-  "perday": np.random.choice([1, 2, 3], size=num_patients),  # Daily dosage
-  "ATC": np.random.choice(["medA", "medB", "medC"], size=num_patients),  # Drug type
-  "dur_original": np.random.randint(7, 30, size=num_patients)  # Duration of medication
-})
-
+# # Simulated data
+# df = pd.DataFrame({
+#   "pnr": np.random.randint(1000, 1010, size=num_patients),  # Patient IDs
+#   "eksd": pd.date_range(start="2020-01-01", periods=num_patients, freq="D"),  # Prescription dates
+#   "perday": np.random.choice([1, 2, 3], size=num_patients),  # Daily dosage
+#   "ATC": np.random.choice(["medA", "medB", "medC"], size=num_patients),  # Drug type
+#   "dur_original": np.random.randint(7, 30, size=num_patients)  # Duration of medication
+# })
+script_dir = os.path.dirname(os.path.abspath(__file__)) 
+file_path = os.path.join(script_dir, "med_events.csv") 
+med_events = pd.read_csv(file_path)
+ExamplePats = med_events.copy()
+tidy = ExamplePats.copy()
+tidy.columns = ["pnr", "eksd", "perday", "ATC", "dur_original"]
+tidy['eksd'] = pd.to_datetime(tidy['eksd'], format='%m/%d/%Y')
 
 def see_kmeans(arg1):
 
   # 1. Compute Event Intervals
-  C09CA01 = df[df["ATC"] == arg1].copy()
+  C09CA01 = tidy[tidy["ATC"] == arg1].copy()
   C09CA01 = C09CA01.sort_values(by=["pnr", "eksd"])
   C09CA01["prev_eksd"] = C09CA01.groupby("pnr")["eksd"].shift(1)
   C09CA01 = C09CA01.dropna(subset=["prev_eksd"])
@@ -59,7 +66,7 @@ def see_kmeans(arg1):
   scaler = StandardScaler()
   scaled_data = scaler.fit_transform(df_ecdf[['x']])
   silhouette_scores = []
-  for k in range(2, 10):
+  for k in range(2, min(10, len(scaled_data))):
     km = KMeans(n_clusters=k, random_state=1234)
     km.fit(scaled_data)
     silhouette_scores.append(km.inertia_)
@@ -86,8 +93,6 @@ def see_assumption(df):
   plt.axhline(df.groupby('pnr')["Duration"].median().median(), linestyle="dashed", color="red")
   plt.title("Boxplot of Event Durations")
   plt.show()
-
-  return df
 
 medA = see_kmeans("medA")
 medB = see_kmeans("medB")
