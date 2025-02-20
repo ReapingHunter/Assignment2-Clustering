@@ -19,7 +19,7 @@ df = pd.DataFrame({
 })
 
 
-def see(arg1):
+def see_kmeans(arg1):
   C09CA01 = df[df["ATC"] == arg1].copy()
 
   # Sorting prescriptions by patient and date
@@ -68,8 +68,8 @@ def see(arg1):
   return C09CA01
 
 # Running the function for medA and medB
-medA = see("medA")
-medB = see("medB")
+medA = see_kmeans("medA")
+medB = see_kmeans("medB")
 
 def see_assumption(df):
   df = df.sort_values(by=["pnr", "eksd"])
