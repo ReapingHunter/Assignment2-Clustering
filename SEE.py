@@ -67,10 +67,6 @@ def see_kmeans(arg1):
 
   return C09CA01
 
-# Running the function for medA and medB
-medA = see_kmeans("medA")
-medB = see_kmeans("medB")
-
 def see_assumption(df):
   df = df.sort_values(by=["pnr", "eksd"])
   df["prev_eksd"] = df.groupby("pnr")["eksd"].shift(1)
@@ -87,7 +83,7 @@ def see_assumption(df):
 
   return df
 
-medA = see("medA")
-medB = see("medB")
+medA = see_kmeans("medA")
+medB = see_kmeans("medB")
 see_assumption(medA)
 see_assumption(medB)
