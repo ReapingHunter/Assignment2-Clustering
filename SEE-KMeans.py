@@ -7,14 +7,12 @@ from scipy.stats import gaussian_kde
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
-import os
+import rpy2.robjects as robjects
 # -------------------------
-# Load dataset – equivalent to R's med.events
+# Load dataset – uses AdhereR's med.events
 # -------------------------
-
-script_dir = os.path.dirname(os.path.abspath(__file__)) 
-file_path = os.path.join(script_dir, "med_events.csv")  
-med_events = pd.read_csv(file_path)  # Ensure the CSV file is in the working directory
+robjects.r('library(AdhereR)')
+med_events = robjects.r('med.events')  # Ensure the CSV file is in the working directory
 ExamplePats = med_events.copy()
 tidy = ExamplePats.copy()
 tidy.columns = ["pnr", "eksd", "perday", "ATC", "dur_original"]
