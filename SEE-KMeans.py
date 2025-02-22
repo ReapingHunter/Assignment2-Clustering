@@ -184,11 +184,15 @@ def see_assumption(arg1):
     # Sort by pnr and eksd and compute previous date per group
     arg1 = arg1.sort_values(by=['pnr', 'eksd'])
     arg1['prev_eksd'] = arg1.groupby('pnr')['eksd'].shift(1)
-    Drug_see2 = arg1.copy()
-    Drug_see2['p_number'] = Drug_see2.groupby('pnr').cumcount() + 1
-    Drug_see2 = Drug_see2[Drug_see2['p_number'] >= 2].copy()
-    Drug_see2 = Drug_see2[['pnr', 'eksd', 'prev_eksd', 'p_number']].copy()
-    # Convert Duration to numeric (in days)
+    
+    # Create sequence numbers per patient
+    arg1['p_number'] = arg1.groupby('pnr').cumcount() + 1
+    
+    # Filter p_number >= 2
+    Drug_see2 = arg1[arg1['p_number'] >= 2].copy()
+    Drug_see2 = Drug_see2[['pnr', 'eksd', 'prev_eksd', 'p_number']]
+    
+    # Calculate Duration
     Drug_see2['Duration'] = (Drug_see2['eksd'] - Drug_see2['prev_eksd']).dt.days.astype(float)
     Drug_see2['p_number'] = Drug_see2['p_number'].astype(str)
     
@@ -198,11 +202,13 @@ def see_assumption(arg1):
     plt.title("Boxplot of Duration by p_number")
     plt.show()
     
-    medians_of_medians = Drug_see2.groupby('pnr')['Duration'].median().reset_index().rename(columns={'Duration': 'median_duration'})
+    # Compute median duration per patient
+    medians_of_medians = Drug_see2.groupby('pnr')['Duration'].median().reset_index()
+    global_median = medians_of_medians['Duration'].median()
     
+    # Plot with median reference line
     plt.figure(figsize=(8, 6))
     sns.boxplot(x='p_number', y='Duration', data=Drug_see2)
-    global_median = medians_of_medians['median_duration'].mean()
     plt.axhline(global_median, linestyle='dashed', color='red')
     plt.title("Boxplot of Duration with Median Line")
     plt.show()
