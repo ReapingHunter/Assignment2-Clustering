@@ -26,15 +26,6 @@ tidy['eksd'] = pd.to_datetime(tidy['eksd'], format='%m/%d/%Y')
 
 arg1 = "medA"
 
-def optimal_eps(data):
-    """Find the optimal epsilon using KneeLocator to detect the elbow point."""
-    neighbors = NearestNeighbors(n_neighbors=5)
-    neighbors_fit = neighbors.fit(data)
-    distances, _ = neighbors_fit.kneighbors(data)
-    distances = np.sort(distances[:, -1])
-    kneedle = KneeLocator(range(len(distances)), distances, curve="convex", direction="increasing")
-    return distances[kneedle.elbow] if kneedle.elbow else np.percentile(distances, 90)  # Fallback if no clear elbow
-
 def See(arg1):
     # Filter rows where ATC equals arg1
     C09CA01 = tidy[tidy['ATC'] == arg1].copy()
@@ -94,7 +85,7 @@ def See(arg1):
     scaler = StandardScaler()
     a_scaled = scaler.fit_transform(a_df)
     a_scaled = pd.DataFrame(a_scaled, columns=['x', 'y'])
-    
+
     best_eps = None
     best_score = -1
     scores = {}
@@ -120,9 +111,8 @@ def See(arg1):
     plt.show()
 
     # DBSCAN clustering on dfper['x']
-    dfper_scaled = StandardScaler().fit_transform(dfper[['x']])
-    eps_value = optimal_eps(dfper_scaled)
-    db = DBSCAN(eps=eps_value, min_samples=2).fit(dfper_scaled)
+    db = DBSCAN(eps=best_eps, min_samples=2)
+    db.fit(dfper[['x']])
     dfper['cluster'] = db.labels_
 
     # Noise Removal
