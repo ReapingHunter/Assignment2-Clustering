@@ -197,12 +197,12 @@ def see_assumption(arg1):
     Drug_see2['p_number'] = Drug_see2['p_number'].astype(str)
     
     # Compute median duration per patient
-    medians_of_medians = Drug_see2.groupby('pnr')['Duration'].median().median()
+    global_median = Drug_see2['Duration'].median()
     
     # Plot with median reference line
     plt.figure(figsize=(8, 6))
     sns.boxplot(x='p_number', y='Duration', data=Drug_see2)
-    plt.axhline(medians_of_medians, linestyle='dashed', color='red')
+    plt.axhline(global_median, linestyle='dashed', color='red')
     plt.yticks(np.arange(0, 350, 100))
     plt.xlabel("p_number")
     plt.ylabel("Duration")
