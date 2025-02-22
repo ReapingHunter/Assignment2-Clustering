@@ -53,7 +53,7 @@ def See(arg1):
     # Remove any non-finite x values (fixes the infinity error)
     dfper = dfper[np.isfinite(dfper['x'])]
     max_x = dfper['x'].max()
-
+    
     # Plot the 80% and 100% ECDF side by side
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
     axs[0].plot(dfper['x'], dfper['y'])
@@ -79,16 +79,19 @@ def See(arg1):
     plt.plot(x1, y1)
     plt.title("Log(event interval)")
     plt.show()
-
+    z1 = x1.max()
+    
     # Create a DataFrame 'a' from the density estimates and scale it
     a_df = pd.DataFrame({'x': x1, 'y': y1})
     scaler = StandardScaler()
     a_scaled = scaler.fit_transform(a_df)
     a_scaled = pd.DataFrame(a_scaled, columns=['x', 'y'])
 
+    # Silhouette analysis to choose optimal eps
     best_eps = None
     best_score = -1
     scores = {}
+
     # Try different eps values
     eps_values = np.linspace(0.1, 2.0, 20)  # Adjust range as needed
 
@@ -109,9 +112,10 @@ def See(arg1):
     plt.xlabel("Epsilon (eps)")
     plt.ylabel("Silhouette Score")
     plt.show()
-
+    optimal_eps = best_eps
+    
     # DBSCAN clustering on dfper['x']
-    db = DBSCAN(eps=best_eps, min_samples=5)
+    db = DBSCAN(eps=optimal_eps, min_samples=5)
     db.fit(dfper[['x']])
     dfper['cluster'] = db.labels_
 
