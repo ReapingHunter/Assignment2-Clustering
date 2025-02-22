@@ -112,7 +112,7 @@ def See(arg1):
     plt.xlabel("Epsilon (eps)")
     plt.ylabel("Silhouette Score")
     plt.show()
-    optimal_eps = best_eps
+    optimal_eps = best_eps    
     
     # DBSCAN clustering on dfper['x']
     db = DBSCAN(eps=optimal_eps, min_samples=5)
