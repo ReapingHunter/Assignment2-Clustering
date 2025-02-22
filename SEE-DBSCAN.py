@@ -120,11 +120,12 @@ def see_assumption(arg1):
     plt.title("Boxplot of Duration by p_number")
     plt.show()
     
-    medians_of_medians = Drug_see2.groupby('pnr')['Duration'].median().reset_index().rename(columns={'Duration': 'median_duration'})
-    
+    # medians_of_medians = Drug_see2.groupby('pnr')['Duration'].median().reset_index().rename(columns={'Duration': 'median_duration'})
+
     plt.figure(figsize=(8, 6))
     sns.boxplot(x='p_number', y='Duration', data=Drug_see2)
-    global_median = medians_of_medians['median_duration'].mean()
+    global_median = Drug_see2['Duration'].median()
+    # global_median = medians_of_medians['median_duration'].mean()
     plt.axhline(global_median, linestyle='dashed', color='red')
     plt.title("Boxplot of Duration with Median Line")
     plt.show()

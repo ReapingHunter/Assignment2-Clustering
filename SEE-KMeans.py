@@ -203,8 +203,7 @@ def see_assumption(arg1):
     plt.show()
     
     # Compute median duration per patient
-    medians_of_medians = Drug_see2.groupby('pnr')['Duration'].median().reset_index()
-    global_median = medians_of_medians['Duration'].median()
+    global_median = Drug_see2['Duration'].median()
     
     # Plot with median reference line
     plt.figure(figsize=(8, 6))
