@@ -6,6 +6,7 @@ from statsmodels.distributions.empirical_distribution import ECDF
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
+from kneed import KneeLocator
 import os
 # -------------------------
 # Load dataset – equivalent to R's med.events
@@ -22,12 +23,13 @@ tidy['eksd'] = pd.to_datetime(tidy['eksd'], format='%m/%d/%Y')
 arg1 = "medA"
 
 def optimal_eps(data):
-    """Find the optimal epsilon using a k-distance plot."""
+    """Find the optimal epsilon using KneeLocator to detect the elbow point."""
     neighbors = NearestNeighbors(n_neighbors=5)
     neighbors_fit = neighbors.fit(data)
     distances, _ = neighbors_fit.kneighbors(data)
     distances = np.sort(distances[:, -1])
-    return distances[int(0.9 * len(distances))]
+    kneedle = KneeLocator(range(len(distances)), distances, curve="convex", direction="increasing")
+    return distances[kneedle.elbow] if kneedle.elbow else np.percentile(distances, 90)  # Fallback if no clear elbow
 
 def See(arg1):
     # Filter rows where ATC equals arg1
@@ -72,7 +74,7 @@ def See(arg1):
     # DBSCAN clustering on dfper['x']
     dfper_scaled = StandardScaler().fit_transform(dfper[['x']])
     eps_value = optimal_eps(dfper_scaled)
-    db = DBSCAN(eps=eps_value, min_samples=5).fit(dfper_scaled)
+    db = DBSCAN(eps=eps_value, min_samples=2).fit(dfper_scaled)
     dfper['cluster'] = db.labels_
 
     # Process clusters
