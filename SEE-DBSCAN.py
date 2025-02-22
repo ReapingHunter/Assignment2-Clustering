@@ -111,7 +111,7 @@ def See(arg1):
     plt.show()
 
     # DBSCAN clustering on dfper['x']
-    db = DBSCAN(eps=best_eps, min_samples=2)
+    db = DBSCAN(eps=best_eps, min_samples=5)
     db.fit(dfper[['x']])
     dfper['cluster'] = db.labels_
 
