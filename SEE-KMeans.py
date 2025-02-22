@@ -26,16 +26,20 @@ arg1 = "medA"
 def See(arg1):
     # Filter rows where ATC equals arg1
     C09CA01 = tidy[tidy['ATC'] == arg1].copy()
+
     # Take a random sequence of consecutive prescription in the dataset
     Drug_see_p0 = C09CA01.copy()
     Drug_see_p1 = C09CA01.copy()
+
     # Sort by pnr and eksd and compute previous prescription date per patient
     Drug_see_p1 = Drug_see_p1.sort_values(by=['pnr', 'eksd'])
     Drug_see_p1['prev_eksd'] = Drug_see_p1.groupby('pnr')['eksd'].shift(1)
     Drug_see_p1 = Drug_see_p1.dropna(subset=['prev_eksd'])
+
     # For each patient, randomly sample one row (fixing deprecation warning by leaving grouping columns)
     Drug_see_p1 = Drug_see_p1.groupby('pnr', group_keys=False).apply(lambda x: x.sample(n=1, random_state=1234))
     Drug_see_p1 = Drug_see_p1[['pnr', 'eksd', 'prev_eksd']].copy()
+
     # Compute event.interval as the duration (in days) between prescriptions
     Drug_see_p1['event.interval'] = (Drug_see_p1['eksd'] - Drug_see_p1['prev_eksd']).dt.days.astype(float)
     
@@ -47,6 +51,7 @@ def See(arg1):
     
     # Retain the 20% of the ECDF (remove the upper 20%)
     dfper = dfper[dfper['y'] <= 0.8]
+
     # Remove any non-finite x values (fixes the infinity error)
     dfper = dfper[np.isfinite(dfper['x'])]
     max_x = dfper['x'].max()
@@ -96,6 +101,7 @@ def See(arg1):
         if score > best_score:
             best_score = score
             best_k = k
+
     # Plot silhouette scores
     plt.plot(list(scores.keys()), list(scores.values()), marker='o')
     plt.title("Silhouette Analysis")
@@ -108,20 +114,24 @@ def See(arg1):
     km_final = KMeans(n_clusters=max_cluster, random_state=1234, n_init=10)
     km_final.fit(dfper[['x']])
     dfper['cluster'] = km_final.labels_
+
     # Summarize log(x) by cluster: compute min and max per cluster
     ni2 = dfper.groupby('cluster')['x'].apply(lambda s: np.log(s).min())
     ni3 = dfper.groupby('cluster')['x'].apply(lambda s: np.log(s).max())
     ni2_df = ni2.reset_index().rename(columns={'x': 'Results'})
     ni3_df = ni3.reset_index().rename(columns={'x': 'Results'})
     ni2_df['Results'] = ni2_df['Results'].replace(-np.inf, 0)
+
     # Combine ni2 and ni3 into one DataFrame (preserving order)
     nif = pd.concat([ni2_df, ni3_df.iloc[:, 1]], axis=1)
     nif.columns = ['Cluster', 'Results', 'Results_1']
+
     # Remove the third column (as in R code)
     nif = nif[['Cluster', 'Results']]
     # Exponentiate the results
     nif['Results'] = np.exp(nif['Results'])
     nif['Results_1'] = np.exp(ni3_df['Results'])
+
     # Compute median of log(x) per cluster
     ni4 = dfper.groupby('cluster')['x'].apply(lambda s: np.median(np.log(s)))
     ni4_df = ni4.reset_index().rename(columns={'x': 'Results'})
@@ -136,13 +146,14 @@ def See(arg1):
     nif['key'] = 1
     results = pd.merge(Drug_see_p1, nif, on='key')
     results.drop('key', axis=1, inplace=True)
+
     # Create Final_cluster: if event.interval is between Minimum and Maximum, assign Cluster; else NaN
     # Note: In the merge, assume that the column from nif corresponding to Cluster is named 'Cluster_y'
     # Adjust column names accordingly:
     if 'Cluster_y' not in results.columns:
         # Rename the nif Cluster column after merge if needed
         results = results.rename(columns={'Cluster_x': 'Cluster', 'Cluster_y': 'Cluster'})
-    results['Final_cluster'] = np.where(
+        results['Final_cluster'] = np.where(
         (results['event.interval'] >= results['Minimum']) & (results['event.interval'] <= results['Maximum']),
         results['Cluster'], np.nan
     )
@@ -163,6 +174,7 @@ def See(arg1):
     if 'Freq' in t1_merged.columns:
         t1_merged = t1_merged.drop(columns=['Freq'])
     t1 = t1_merged.copy()
+    
     # Merge Drug_see_p1 with results on 'pnr'
     Drug_see_p1 = pd.merge(Drug_see_p1, results, on='pnr', how='left')
     Drug_see_p1['Median'] = Drug_see_p1['Median'].fillna(t1.iloc[0]['Median'])
@@ -177,7 +189,7 @@ def See(arg1):
     Drug_see_p0['Median'] = pd.to_numeric(Drug_see_p0['Median'], errors='coerce')
     Drug_see_p0['Median'] = Drug_see_p0['Median'].fillna(t1.iloc[0]['Median'])
     Drug_see_p0['Cluster'] = Drug_see_p0['Cluster'].fillna(0)
-    
+
     return Drug_see_p0
 
 def see_assumption(arg1):
