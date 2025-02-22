@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from statsmodels.distributions.empirical_distribution import ECDF
 from sklearn.preprocessing import StandardScaler
+from scipy.stats import gaussian_kde
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 from kneed import KneeLocator
@@ -59,7 +60,8 @@ def See(arg1):
     dfper = dfper[dfper['y'] <= 0.8]
     # Remove any non-finite x values (fixes the infinity error)
     dfper = dfper[np.isfinite(dfper['x'])]
-    
+    max_x = dfper['x'].max()
+
     # Plot the 80% and 100% ECDF side by side
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
     axs[0].plot(dfper['x'], dfper['y'])
@@ -73,6 +75,19 @@ def See(arg1):
     m1.plot(kind='bar', title="Frequency of pnr")
     plt.show()
     
+    ni = max_x
+    # Fixed: Use Drug_see_p1 instead of undefined variable
+    Drug_see_p2 = Drug_see_p1[Drug_see_p1['event.interval'] <= ni].copy()
+    
+    # Compute the density of log(event.interval)
+    log_event = np.log(Drug_see_p2['event.interval'].astype(float))
+    density = gaussian_kde(log_event)
+    x1 = np.linspace(log_event.min(), log_event.max(), 100)
+    y1 = density(x1)
+    plt.plot(x1, y1)
+    plt.title("Log(event interval)")
+    plt.show()
+
     # DBSCAN clustering on dfper['x']
     dfper_scaled = StandardScaler().fit_transform(dfper[['x']])
     eps_value = optimal_eps(dfper_scaled)
@@ -106,28 +121,29 @@ def see_assumption(arg1):
     # Sort by pnr and eksd and compute previous date per group
     arg1 = arg1.sort_values(by=['pnr', 'eksd'])
     arg1['prev_eksd'] = arg1.groupby('pnr')['eksd'].shift(1)
-    Drug_see2 = arg1.copy()
-    Drug_see2['p_number'] = Drug_see2.groupby('pnr').cumcount() + 1
-    Drug_see2 = Drug_see2[Drug_see2['p_number'] >= 2].copy()
-    Drug_see2 = Drug_see2[['pnr', 'eksd', 'prev_eksd', 'p_number']].copy()
-    # Convert Duration to numeric (in days)
+    
+    # Create sequence numbers per patient
+    arg1['p_number'] = arg1.groupby('pnr').cumcount() + 1
+    
+    # Filter p_number >= 2
+    Drug_see2 = arg1[arg1['p_number'] >= 2].copy()
+    Drug_see2 = Drug_see2[['pnr', 'eksd', 'prev_eksd', 'p_number']]
+    
+    # Calculate Duration
     Drug_see2['Duration'] = (Drug_see2['eksd'] - Drug_see2['prev_eksd']).dt.days.astype(float)
     Drug_see2['p_number'] = Drug_see2['p_number'].astype(str)
     
-    # Create boxplot using seaborn
-    plt.figure(figsize=(8, 6))
-    sns.boxplot(x='p_number', y='Duration', data=Drug_see2)
-    plt.title("Boxplot of Duration by p_number")
-    plt.show()
-    
-    # medians_of_medians = Drug_see2.groupby('pnr')['Duration'].median().reset_index().rename(columns={'Duration': 'median_duration'})
-
-    plt.figure(figsize=(8, 6))
-    sns.boxplot(x='p_number', y='Duration', data=Drug_see2)
+    # Compute median duration per patient
     global_median = Drug_see2['Duration'].median()
-    # global_median = medians_of_medians['median_duration'].mean()
+    
+    # Plot with median reference line
+    plt.figure(figsize=(8, 6))
+    sns.boxplot(x='p_number', y='Duration', data=Drug_see2)
     plt.axhline(global_median, linestyle='dashed', color='red')
-    plt.title("Boxplot of Duration with Median Line")
+    plt.yticks(np.arange(0, 350, 100))
+    plt.xlabel("p_number")
+    plt.ylabel("Duration")
+    plt.title("Boxplot of Duration by p_number")
     plt.show()
     
     return plt

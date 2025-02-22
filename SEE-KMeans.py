@@ -196,12 +196,6 @@ def see_assumption(arg1):
     Drug_see2['Duration'] = (Drug_see2['eksd'] - Drug_see2['prev_eksd']).dt.days.astype(float)
     Drug_see2['p_number'] = Drug_see2['p_number'].astype(str)
     
-    # Create boxplot using seaborn
-    plt.figure(figsize=(8, 6))
-    sns.boxplot(x='p_number', y='Duration', data=Drug_see2)
-    plt.title("Boxplot of Duration by p_number")
-    plt.show()
-    
     # Compute median duration per patient
     global_median = Drug_see2['Duration'].median()
     
@@ -209,7 +203,10 @@ def see_assumption(arg1):
     plt.figure(figsize=(8, 6))
     sns.boxplot(x='p_number', y='Duration', data=Drug_see2)
     plt.axhline(global_median, linestyle='dashed', color='red')
-    plt.title("Boxplot of Duration with Median Line")
+    plt.yticks(np.arange(0, 350, 100))
+    plt.xlabel("p_number")
+    plt.ylabel("Duration")
+    plt.title("Boxplot of Duration by p_number")
     plt.show()
     
     return plt
