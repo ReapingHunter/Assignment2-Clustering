@@ -63,8 +63,16 @@ def See(arg1):
     plt.show()
     
     # Create and plot a frequency table for pnr
-    m1 = Drug_see_p1['pnr'].value_counts()
-    m1.plot(kind='bar', title="Frequency of pnr")
+    m1 = Drug_see_p1['pnr'].value_counts().sort_index()
+
+    # Define x-tick positions based on R script values
+    xticks = [1, 15, 32, 48, 64, 80, 96]
+
+    plt.bar(m1.index, m1.values)
+    plt.xticks(xticks)  # Set custom tick positions
+    plt.xlabel("pnr")
+    plt.ylabel("Frequency")
+    plt.title("Frequency of pnr (Adjusted)")
     plt.show()
     
     ni = max_x
