@@ -7,14 +7,16 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 from kneed import KneeLocator
-import os
+import rpy2.robjects as robjects
+from rpy2.robjects import pandas2ri
 # -------------------------
-# Load dataset – equivalent to R's med.events
+# Load dataset – uses AdhereR's med.events
 # -------------------------
 
-script_dir = os.path.dirname(os.path.abspath(__file__)) 
-file_path = os.path.join(script_dir, "med_events.csv")  
-med_events = pd.read_csv(file_path)  # Ensure the CSV file is in the working directory
+pandas2ri.activate()
+robjects.r('library(AdhereR)')
+med_events_r = robjects.r('med.events')
+med_events = pandas2ri.rpy2py(med_events_r)
 ExamplePats = med_events.copy()
 tidy = ExamplePats.copy()
 tidy.columns = ["pnr", "eksd", "perday", "ATC", "dur_original"]
