@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from statsmodels.distributions.empirical_distribution import ECDF
-from scipy.stats import gaussian_kde
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
@@ -56,7 +55,6 @@ def See(arg1):
     dfper = dfper[dfper['y'] <= 0.8]
     # Remove any non-finite x values (fixes the infinity error)
     dfper = dfper[np.isfinite(dfper['x'])]
-    max_x = dfper['x'].max()
     
     # Plot the 80% and 100% ECDF side by side
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
@@ -71,26 +69,6 @@ def See(arg1):
     m1.plot(kind='bar', title="Frequency of pnr")
     plt.show()
     
-    ni = max_x
-    # Fixed: Use Drug_see_p1 instead of undefined variable
-    Drug_see_p2 = Drug_see_p1[Drug_see_p1['event.interval'] <= ni].copy()
-    
-    # Compute the density of log(event.interval)
-    log_event = np.log(Drug_see_p2['event.interval'].astype(float))
-    density = gaussian_kde(log_event)
-    x1 = np.linspace(log_event.min(), log_event.max(), 100)
-    y1 = density(x1)
-    plt.plot(x1, y1)
-    plt.title("Log(event interval)")
-    plt.show()
-    z1 = x1.max()
-    
-    # Create a DataFrame 'a' from the density estimates and scale it
-    a_df = pd.DataFrame({'x': x1, 'y': y1})
-    scaler = StandardScaler()
-    a_scaled = scaler.fit_transform(a_df)
-    a_scaled = pd.DataFrame(a_scaled, columns=['x', 'y'])
-    
     # DBSCAN clustering on dfper['x']
     dfper_scaled = StandardScaler().fit_transform(dfper[['x']])
     eps_value = optimal_eps(dfper_scaled)
@@ -98,18 +76,12 @@ def See(arg1):
     dfper['cluster'] = db.labels_
 
     # Process clusters
-    ni2 = dfper.groupby('cluster')['x'].apply(lambda s: np.log(s).min())
-    ni3 = dfper.groupby('cluster')['x'].apply(lambda s: np.log(s).max())
-    ni4 = dfper.groupby('cluster')['x'].apply(lambda s: np.median(np.log(s)))
-    
-    nif = pd.concat([ni2, ni3, ni4], axis=1).reset_index()
-    nif.columns = ['Cluster', 'Minimum', 'Maximum', 'Median']
-    nif[['Minimum', 'Maximum', 'Median']] = np.exp(nif[['Minimum', 'Maximum', 'Median']])
+    cluster_stats = dfper.groupby('cluster')['x'].agg(['min', 'max', 'median']).reset_index()
+    cluster_stats.columns = ['Cluster', 'Minimum', 'Maximum', 'Median']
     
     # Assign clusters
-    Drug_see_p1['key'] = 1
-    nif['key'] = 1
-    results = pd.merge(Drug_see_p1, nif, on='key').drop('key', axis=1)
+    results = Drug_see_p1.copy()
+    results = results.merge(cluster_stats, how='cross')
     results['Final_cluster'] = np.where(
         (results['event.interval'] >= results['Minimum']) & (results['event.interval'] <= results['Maximum']),
         results['Cluster'], np.nan)
@@ -118,9 +90,9 @@ def See(arg1):
     
     # Merge results back to original dataset
     Drug_see_p0 = pd.merge(C09CA01, results, on='pnr', how='left')
-    Drug_see_p0['Median'] = Drug_see_p0['Median'].fillna(nif['Median'].min())
+    Drug_see_p0['Median'] = Drug_see_p0['Median'].fillna(cluster_stats['Median'].min())
     Drug_see_p0['Cluster'] = Drug_see_p0['Cluster'].fillna(0)
-    
+
     return Drug_see_p0
 
 def see_assumption(arg1):
