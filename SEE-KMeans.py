@@ -58,9 +58,9 @@ def See(arg1):
     
     # Plot the 80% and 100% ECDF side by side
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
-    axs[0].plot(dfper['x'], dfper['y'])
-    axs[0].set_title("80% ECDF")
-    axs[1].plot(x_vals, y_vals)
+    axs[0].plot(dfper['x'], dfper['y'], marker='.', linestyle='none')
+    axs[0].set_title("80% ECDF" )
+    axs[1].plot(x_vals, y_vals, marker='.', linestyle='none')
     axs[1].set_title("100% ECDF")
     plt.show()
     
