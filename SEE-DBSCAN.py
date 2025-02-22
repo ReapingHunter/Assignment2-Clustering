@@ -76,6 +76,8 @@ def See(arg1):
     eps_value = optimal_eps(dfper_scaled)
     db = DBSCAN(eps=eps_value, min_samples=2).fit(dfper_scaled)
     dfper['cluster'] = db.labels_
+
+    # Noise Removal
     dfper = dfper[dfper['cluster'] != -1]
 
     # Process clusters
