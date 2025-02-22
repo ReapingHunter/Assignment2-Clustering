@@ -6,6 +6,7 @@ from statsmodels.distributions.empirical_distribution import ECDF
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
+from sklearn.metrics import silhouette_score, silhouette_samples
 from kneed import KneeLocator
 import os
 # -------------------------
@@ -76,6 +77,40 @@ def See(arg1):
     eps_value = optimal_eps(dfper_scaled)
     db = DBSCAN(eps=eps_value, min_samples=2).fit(dfper_scaled)
     dfper['cluster'] = db.labels_
+    dfper_valid = dfper[dfper['cluster'] != -1].copy()
+
+    # Compute Silhouette Score if at least 2 clusters exist
+    if dfper_valid['cluster'].nunique() > 1:
+        silhouette_avg = silhouette_score(dfper_valid[['x']], dfper_valid['cluster'])
+        sample_silhouette_values = silhouette_samples(dfper_valid[['x']], dfper_valid['cluster'])
+        
+        print(f"Silhouette Score for {arg1}: {silhouette_avg:.4f}")
+
+        # Plot silhouette scores
+        fig, ax = plt.subplots(figsize=(8, 6))
+        y_lower = 10
+        for i in np.unique(dfper_valid['cluster']):
+            ith_cluster_silhouette_values = sample_silhouette_values[dfper_valid['cluster'] == i]
+            ith_cluster_silhouette_values.sort()
+            
+            size_cluster_i = ith_cluster_silhouette_values.shape[0]
+            y_upper = y_lower + size_cluster_i
+            
+            ax.fill_betweenx(
+                np.arange(y_lower, y_upper),
+                0, ith_cluster_silhouette_values,
+                alpha=0.7
+            )
+            ax.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
+            y_lower = y_upper + 10
+
+        ax.set_title(f"Silhouette Plot for {arg1}")
+        ax.set_xlabel("Silhouette Coefficient Values")
+        ax.set_ylabel("Cluster Label")
+        ax.axvline(x=silhouette_avg, color="red", linestyle="--")
+        plt.show()
+    else:
+        print(f"Silhouette analysis skipped for {arg1} (only 1 cluster detected).")
 
     # Process clusters
     cluster_stats = dfper.groupby('cluster')['x'].agg(['min', 'max', 'median']).reset_index()
