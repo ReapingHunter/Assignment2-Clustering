@@ -120,7 +120,7 @@ def See(arg1):
     dfper['cluster'] = db.labels_
 
     # Noise Removal
-    dfper = dfper[dfper['cluster'] != -1]
+    dfper = dfper[dfper['cluster'] != -1].copy()
 
     # Process clusters
     cluster_stats = dfper.groupby('cluster')['x'].agg(['min', 'max', 'median']).reset_index()
