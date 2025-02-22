@@ -6,6 +6,7 @@ from statsmodels.distributions.empirical_distribution import ECDF
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import gaussian_kde
 from sklearn.cluster import DBSCAN
+from sklearn.metrics import silhouette_score
 from sklearn.neighbors import NearestNeighbors
 from kneed import KneeLocator
 import rpy2.robjects as robjects
@@ -86,6 +87,36 @@ def See(arg1):
     y1 = density(x1)
     plt.plot(x1, y1)
     plt.title("Log(event interval)")
+    plt.show()
+
+    # Create a DataFrame 'a' from the density estimates and scale it
+    a_df = pd.DataFrame({'x': x1, 'y': y1})
+    scaler = StandardScaler()
+    a_scaled = scaler.fit_transform(a_df)
+    a_scaled = pd.DataFrame(a_scaled, columns=['x', 'y'])
+    
+    best_eps = None
+    best_score = -1
+    scores = {}
+    # Try different eps values
+    eps_values = np.linspace(0.1, 2.0, 20)  # Adjust range as needed
+
+    for eps in eps_values:
+        db = DBSCAN(eps=eps, min_samples=5).fit(a_scaled)
+        
+        # Only compute silhouette score if at least 2 clusters exist
+        if len(set(db.labels_)) > 1:
+            score = silhouette_score(a_scaled, db.labels_)
+            scores[eps] = score
+            if score > best_score:
+                best_score = score
+                best_eps = eps
+
+    # Plot silhouette scores
+    plt.plot(list(scores.keys()), list(scores.values()), marker='o')
+    plt.title("DBSCAN Silhouette Analysis")
+    plt.xlabel("Epsilon (eps)")
+    plt.ylabel("Silhouette Score")
     plt.show()
 
     # DBSCAN clustering on dfper['x']
