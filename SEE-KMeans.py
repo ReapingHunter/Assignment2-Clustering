@@ -8,11 +8,14 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import rpy2.robjects as robjects
+from rpy2.robjects import pandas2ri
 # -------------------------
 # Load dataset – uses AdhereR's med.events
 # -------------------------
+pandas2ri.activate()
 robjects.r('library(AdhereR)')
-med_events = robjects.r('med.events')  # Ensure the CSV file is in the working directory
+med_events_r = robjects.r('med.events')
+med_events = pandas2ri.rpy2py(med_events_r)
 ExamplePats = med_events.copy()
 tidy = ExamplePats.copy()
 tidy.columns = ["pnr", "eksd", "perday", "ATC", "dur_original"]
