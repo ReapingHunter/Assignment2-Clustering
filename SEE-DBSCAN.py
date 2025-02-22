@@ -29,16 +29,20 @@ arg1 = "medA"
 def See(arg1):
     # Filter rows where ATC equals arg1
     C09CA01 = tidy[tidy['ATC'] == arg1].copy()
+
     # Take a random sequence of consecutive prescription in the dataset
     Drug_see_p0 = C09CA01.copy()
     Drug_see_p1 = C09CA01.copy()
+
     # Sort by pnr and eksd and compute previous prescription date per patient
     Drug_see_p1 = Drug_see_p1.sort_values(by=['pnr', 'eksd'])
     Drug_see_p1['prev_eksd'] = Drug_see_p1.groupby('pnr')['eksd'].shift(1)
     Drug_see_p1 = Drug_see_p1.dropna(subset=['prev_eksd'])
+
     # For each patient, randomly sample one row (fixing deprecation warning by leaving grouping columns)
     Drug_see_p1 = Drug_see_p1.groupby('pnr', group_keys=False).apply(lambda x: x.sample(n=1, random_state=1234))
     Drug_see_p1 = Drug_see_p1[['pnr', 'eksd', 'prev_eksd']].copy()
+
     # Compute event.interval as the duration (in days) between prescriptions
     Drug_see_p1['event.interval'] = (Drug_see_p1['eksd'] - Drug_see_p1['prev_eksd']).dt.days.astype(float)
     
@@ -50,6 +54,7 @@ def See(arg1):
     
     # Retain the 20% of the ECDF (remove the upper 20%)
     dfper = dfper[dfper['y'] <= 0.8]
+
     # Remove any non-finite x values (fixes the infinity error)
     dfper = dfper[np.isfinite(dfper['x'])]
     max_x = dfper['x'].max()
