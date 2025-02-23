@@ -48,11 +48,14 @@ def See(arg1):
     # Compute event interval (in days)
     drug_see_p1['event.interval'] = (drug_see_p1['eksd'] - drug_see_p1['prev_eksd']).dt.days.astype(float)
     
-    # --- ECDF computation ---
-    sorted_intervals = np.sort(drug_see_p1['event.interval'].values)
-    n = len(sorted_intervals)
-    ecdf_y = np.arange(1, n + 1) / n
-    df_ecdf = pd.DataFrame({'x': sorted_intervals, 'y': ecdf_y})
+    # Compute the ECDF function using statsmodels
+    ecdf_func = ECDF(drug_see_p1['event.interval'].values)
+
+    # Use sorted event intervals as x-values
+    x_vals = np.sort(drug_see_p1['event.interval'].values)
+    y_vals = ecdf_func(x_vals)
+
+    df_ecdf = pd.DataFrame({'x': x_vals, 'y': y_vals})
     
     # Retain the lower 80% of the ECDF (i.e. where cumulative probability <= 0.8)
     df_ecdf_80 = df_ecdf[df_ecdf['y'] <= 0.8]
