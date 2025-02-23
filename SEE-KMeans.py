@@ -73,10 +73,8 @@ def See(arg1):
     
     # Create and plot a frequency table for pnr
     event_counts = drug_see_p1['pnr'].value_counts()
-    xticks = [1, 15, 32, 48, 64, 80, 96]  # example custom ticks
     plt.figure(figsize=(8, 5))
     event_counts.plot(kind='bar')
-    plt.xticks(xticks)
     plt.xlabel("pnr")
     plt.ylabel("Frequency")
     plt.title("Frequency of pnr (Adjusted)")
