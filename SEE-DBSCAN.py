@@ -2,19 +2,19 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 from statsmodels.distributions.empirical_distribution import ECDF
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import gaussian_kde
 from sklearn.cluster import DBSCAN
 from sklearn.metrics import silhouette_score
-from sklearn.neighbors import NearestNeighbors
-from kneed import KneeLocator
+
 import rpy2.robjects as robjects
 from rpy2.robjects import pandas2ri
+
 # -------------------------
 # Load dataset – uses AdhereR's med.events
 # -------------------------
-
 pandas2ri.activate()
 robjects.r('library(AdhereR)')
 med_events_r = robjects.r('med.events')
@@ -26,170 +26,190 @@ tidy['eksd'] = pd.to_datetime(tidy['eksd'], format='%m/%d/%Y')
 
 arg1 = "medA"
 
-def See(arg1):
-    # Filter rows where ATC equals arg1
-    C09CA01 = tidy[tidy['ATC'] == arg1].copy()
+def see(med_type, min_samples_dbscan=8, eps_range=np.linspace(0.01, 5.0, 100)):
+    # Filter data for the medication type (e.g., "medA")
+    data_med = tidy[tidy['ATC'] == med_type].copy()
+    drug_see_p0 = data_med.copy()  # Original filtered data
 
-    # Take a random sequence of consecutive prescription in the dataset
-    Drug_see_p0 = C09CA01.copy()
-    Drug_see_p1 = C09CA01.copy()
+    # Sort by patient and date; compute previous prescription date per patient.
+    drug_see_p1 = data_med.sort_values(['pnr', 'eksd']).copy()
+    drug_see_p1['prev_eksd'] = drug_see_p1.groupby('pnr')['eksd'].shift(1)
+    drug_see_p1 = drug_see_p1.dropna(subset=['prev_eksd']).copy()
 
-    # Sort by pnr and eksd and compute previous prescription date per patient
-    Drug_see_p1 = Drug_see_p1.sort_values(by=['pnr', 'eksd'])
-    Drug_see_p1['prev_eksd'] = Drug_see_p1.groupby('pnr')['eksd'].shift(1)
-    Drug_see_p1 = Drug_see_p1.dropna(subset=['prev_eksd'])
+    # For each patient, randomly sample one consecutive prescription pair.
+    drug_see_p1 = (drug_see_p1.groupby('pnr', group_keys=False)
+                   .apply(lambda x: x.sample(1, random_state=1234))
+                   .reset_index(drop=True))
+    drug_see_p1 = drug_see_p1[['pnr', 'eksd', 'prev_eksd']]
 
-    # For each patient, randomly sample one row (fixing deprecation warning by leaving grouping columns)
-    Drug_see_p1 = Drug_see_p1.groupby('pnr', group_keys=False).apply(lambda x: x.sample(n=1, random_state=1234))
-    Drug_see_p1 = Drug_see_p1[['pnr', 'eksd', 'prev_eksd']].copy()
+    # Compute event interval (in days)
+    drug_see_p1['event.interval'] = (drug_see_p1['eksd'] - drug_see_p1['prev_eksd']).dt.days.astype(float)
 
-    # Compute event.interval as the duration (in days) between prescriptions
-    Drug_see_p1['event.interval'] = (Drug_see_p1['eksd'] - Drug_see_p1['prev_eksd']).dt.days.astype(float)
-    
-    # Generate the ECDF of event.interval
-    ecdf_func = ECDF(Drug_see_p1['event.interval'])
-    x_vals = ecdf_func.x
-    y_vals = ecdf_func.y
-    dfper = pd.DataFrame({'x': x_vals, 'y': y_vals})
-    
-    # Retain the 20% of the ECDF (remove the upper 20%)
-    dfper = dfper[dfper['y'] <= 0.8]
+    # --- Compute the Empirical Cumulative Distribution Function (ECDF) ---
+    sorted_intervals = np.sort(drug_see_p1['event.interval'].values)
+    ecdf_y = np.arange(1, len(sorted_intervals) + 1) / len(sorted_intervals)
+    dfper = pd.DataFrame({'x': sorted_intervals, 'y': ecdf_y})
 
-    # Remove any non-finite x values (fixes the infinity error)
-    dfper = dfper[np.isfinite(dfper['x'])]
-    max_x = dfper['x'].max()
-    
-    # Plot the 80% and 100% ECDF side by side
+    # Retain the lower 80% of the ECDF (i.e. cumulative probability <= 0.8)
+    dfper_80 = dfper[dfper['y'] <= 0.8]
+    ni = dfper_80['x'].max()
+
+    # Plot the 80% and full ECDF
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
-    axs[0].plot(dfper['x'], dfper['y'], marker='.', linestyle='none')
+    axs[0].plot(dfper_80['x'], dfper_80['y'], marker='.', linestyle='none')
     axs[0].set_title("80% ECDF")
-    axs[1].plot(x_vals, y_vals, marker='.', linestyle='none')
+    axs[0].set_xlabel("Event Interval")
+    axs[0].set_ylabel("ECDF")
+
+    axs[1].plot(dfper['x'], dfper['y'], marker='.', linestyle='none')
     axs[1].set_title("100% ECDF")
+    axs[1].set_xlabel("Event Interval")
+    axs[1].set_ylabel("ECDF")
     plt.show()
-    
-    # Create and plot a frequency table for pnr
-    m1 = Drug_see_p1['pnr'].value_counts().sort_index()
 
-    # Define x-tick positions based on R script values
-    xticks = [1, 15, 32, 48, 64, 80, 96]
-
-    plt.bar(m1.index, m1.values)
-    plt.xticks(xticks)  # Set custom tick positions
+    # Plot frequency of events per patient
+    plt.figure(figsize=(8, 5))
+    drug_see_p1['pnr'].value_counts().plot(kind='bar')
+    plt.title("Frequency of Events per Patient")
     plt.xlabel("pnr")
-    plt.ylabel("Frequency")
-    plt.title("Frequency of pnr (Adjusted)")
+    plt.ylabel("Count")
     plt.show()
-    
-    ni = max_x
-    # Fixed: Use Drug_see_p1 instead of undefined variable
-    Drug_see_p2 = Drug_see_p1[Drug_see_p1['event.interval'] <= ni].copy()
-    
-    # Compute the density of log(event.interval)
-    log_event = np.log(Drug_see_p2['event.interval'].astype(float))
-    density = gaussian_kde(log_event)
-    x1 = np.linspace(log_event.min(), log_event.max(), 100)
-    y1 = density(x1)
-    plt.plot(x1, y1)
-    plt.title("Log(event interval)")
+
+    # Subset data to include only event intervals up to the 80th percentile.
+    drug_see_p2 = drug_see_p1[drug_see_p1['event.interval'] <= ni].copy()
+
+    # --- Density Estimation on log(event.interval) ---
+    log_intervals = np.log(drug_see_p2['event.interval'])
+    kde = gaussian_kde(log_intervals)
+    x_grid = np.linspace(log_intervals.min(), log_intervals.max(), 100)
+    y_kde = kde(x_grid)
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(x_grid, y_kde)
+    plt.title("Density of log(event interval)")
+    plt.xlabel("log(event interval)")
+    plt.ylabel("Density")
     plt.show()
-    z1 = x1.max()
-    
-    # Create a DataFrame 'a' from the density estimates and scale it
-    a_df = pd.DataFrame({'x': x1, 'y': y1})
+
+    # =============================================================================
+    # 3. Silhouette Analysis to Choose eps for DBSCAN
+    # =============================================================================
+    # We'll cluster using the event interval values from the ECDF.
+    X = dfper[['x']].values
     scaler = StandardScaler()
-    a_scaled = scaler.fit_transform(a_df)
-    a_scaled = pd.DataFrame(a_scaled, columns=['x', 'y'])
+    X_scaled = scaler.fit_transform(X)
 
-    # Silhouette analysis to choose optimal eps
-    best_eps = None
-    best_score = -1
-    scores = {}
+    silhouette_scores = {}
+    for eps in eps_range:
+        dbscan = DBSCAN(eps=eps, min_samples=min_samples_dbscan)
+        labels = dbscan.fit_predict(X_scaled)
+        # Exclude noise points (label == -1)
+        mask = labels != -1
+        unique_labels = np.unique(labels[mask])
+        if len(unique_labels) < 2:
+            continue  # Skip if less than 2 clusters (silhouette score undefined)
+        score = silhouette_score(X_scaled[mask], labels[mask])
+        silhouette_scores[eps] = score
 
-    # Try different eps values
-    eps_values = np.linspace(0.1, 2.0, 20)  # Adjust range as needed
+    if silhouette_scores:
+        best_eps = max(silhouette_scores, key=silhouette_scores.get)
+        print(f"Best eps from silhouette analysis: {best_eps:.3f}")
+        # Plot silhouette score vs eps
+        eps_vals = list(silhouette_scores.keys())
+        scores = list(silhouette_scores.values())
+        plt.figure(figsize=(8, 5))
+        plt.plot(eps_vals, scores, marker='o')
+        plt.title("Silhouette Score vs eps for DBSCAN")
+        plt.xlabel("eps")
+        plt.ylabel("Silhouette Score")
+        plt.show()
+    else:
+        best_eps = eps_range[0]
+        print("Silhouette analysis did not yield a valid eps; using default eps =", best_eps)
 
-    for eps in eps_values:
-        db = DBSCAN(eps=eps, min_samples=5).fit(a_scaled)
-        
-        # Only compute silhouette score if at least 2 clusters exist
-        if len(set(db.labels_)) > 1:
-            score = silhouette_score(a_scaled, db.labels_)
-            scores[eps] = score
-            if score > best_score:
-                best_score = score
-                best_eps = eps
+    # =============================================================================
+    # 4. DBSCAN Clustering with Chosen eps
+    # =============================================================================
+    db = DBSCAN(eps=best_eps, min_samples=min_samples_dbscan)
+    labels = db.fit_predict(X_scaled)
+    dfper['cluster'] = labels  # DBSCAN labels noise as -1
 
-    # Plot silhouette scores
-    plt.plot(list(scores.keys()), list(scores.values()), marker='o')
-    plt.title("DBSCAN Silhouette Analysis")
-    plt.xlabel("Epsilon (eps)")
-    plt.ylabel("Silhouette Score")
-    plt.show()
-    optimal_eps = best_eps    
-    
-    # DBSCAN clustering on dfper['x']
-    db = DBSCAN(eps=optimal_eps, min_samples=5)
-    db.fit(dfper[['x']])
-    dfper['cluster'] = db.labels_
+    cluster_stats = (dfper.groupby('cluster')['x']
+                     .agg(min_log=lambda s: np.log(s).min(),
+                          max_log=lambda s: np.log(s).max(),
+                          median_log=lambda s: np.log(s).median())
+                     .reset_index())
+    cluster_stats['Minimum'] = np.exp(cluster_stats['min_log'])
+    cluster_stats['Maximum'] = np.exp(cluster_stats['max_log'])
+    cluster_stats['Median'] = np.exp(cluster_stats['median_log'])
+    cluster_stats = cluster_stats.rename(columns={'cluster': 'db_cluster'})
 
-    # Noise Removal
-    dfper = dfper[dfper['cluster'] != -1].copy()
+    # =============================================================================
+    # 5. Assign Clusters to Patients via Cross Join
+    # =============================================================================
+    drug_see_p1['key'] = 1
+    cluster_stats['key'] = 1
+    cross_df = pd.merge(drug_see_p1, cluster_stats, on='key').drop('key', axis=1)
 
-    # Process clusters
-    cluster_stats = dfper.groupby('cluster')['x'].agg(['min', 'max', 'median']).reset_index()
-    cluster_stats.columns = ['Cluster', 'Minimum', 'Maximum', 'Median']
-    
-    # Assign clusters
-    results = Drug_see_p1.copy()
-    results = results.merge(cluster_stats, how='cross')
-    results['Final_cluster'] = np.where(
-        (results['event.interval'] >= results['Minimum']) & (results['event.interval'] <= results['Maximum']),
-        results['Cluster'], np.nan)
-    results = results.dropna().copy()
-    results = results[['pnr', 'Median', 'Cluster']]
-    
-    # Merge results back to original dataset
-    Drug_see_p0 = pd.merge(C09CA01, results, on='pnr', how='left')
-    Drug_see_p0['Median'] = Drug_see_p0['Median'].fillna(cluster_stats['Median'].min())
-    Drug_see_p0['Cluster'] = Drug_see_p0['Cluster'].fillna(0)
+    # For each row, assign Final_cluster if event.interval falls within the cluster’s [Minimum, Maximum]
+    cross_df['Final_cluster'] = cross_df.apply(
+        lambda row: row['db_cluster'] if (row['event.interval'] >= row['Minimum'] and row['event.interval'] <= row['Maximum'])
+        else np.nan, axis=1)
+    results = cross_df.dropna(subset=['Final_cluster']).copy()
+    results = results[['pnr', 'Median', 'db_cluster']]
 
-    return Drug_see_p0
+    # Determine the most common cluster from the results.
+    cluster_counts = results['db_cluster'].value_counts()
+    if not cluster_counts.empty:
+        most_common_cluster = cluster_counts.idxmax()
+    else:
+        most_common_cluster = None
 
-def see_assumption(arg1):
-    # Sort by pnr and eksd and compute previous date per group
-    arg1 = arg1.sort_values(by=['pnr', 'eksd'])
-    arg1['prev_eksd'] = arg1.groupby('pnr')['eksd'].shift(1)
-    
-    # Create sequence numbers per patient
-    arg1['p_number'] = arg1.groupby('pnr').cumcount() + 1
-    
-    # Filter p_number >= 2
-    Drug_see2 = arg1[arg1['p_number'] >= 2].copy()
-    Drug_see2 = Drug_see2[['pnr', 'eksd', 'prev_eksd', 'p_number']]
-    
-    # Calculate Duration
-    Drug_see2['Duration'] = (Drug_see2['eksd'] - Drug_see2['prev_eksd']).dt.days.astype(float)
-    Drug_see2['p_number'] = Drug_see2['p_number'].astype(str)
-    
-    # Compute median duration per patient
-    global_median = Drug_see2['Duration'].median()
-    
-    # Plot with median reference line
+    if most_common_cluster is not None:
+        default_median = cluster_stats.loc[cluster_stats['db_cluster'] == most_common_cluster, 'Median'].iloc[0]
+    else:
+        default_median = np.nan
+
+    # Merge cluster assignment back into drug_see_p1.
+    drug_see_p1 = pd.merge(drug_see_p1, results, on='pnr', how='left')
+    drug_see_p1['Median'] = drug_see_p1['Median'].fillna(default_median)
+    drug_see_p1['Cluster'] = drug_see_p1['db_cluster'].fillna(0)
+    drug_see_p1['test'] = (drug_see_p1['event.interval'] - drug_see_p1['Median']).round(1)
+    drug_see_p3 = drug_see_p1[['pnr', 'Median', 'Cluster']]
+
+    # Merge the cluster assignments back into the original filtered data.
+    final_df = pd.merge(drug_see_p0, drug_see_p3, on='pnr', how='left')
+    final_df['Median'] = final_df['Median'].fillna(default_median)
+    final_df['Cluster'] = final_df['Cluster'].fillna(0)
+
+    return final_df
+
+# =============================================================================
+# 6. Assumption Check Function
+# =============================================================================
+def see_assumption(df):
+    df_sorted = df.sort_values(['pnr', 'eksd']).copy()
+    df_sorted['prev_eksd'] = df_sorted.groupby('pnr')['eksd'].shift(1)
+    df_sorted['p_number'] = df_sorted.groupby('pnr').cumcount() + 1
+    df2 = df_sorted[df_sorted['p_number'] >= 2].copy()
+    df2 = df2[['pnr', 'eksd', 'prev_eksd', 'p_number']]
+    df2['Duration'] = (df2['eksd'] - df2['prev_eksd']).dt.days
+    df2['p_number'] = df2['p_number'].astype(str)
+
     plt.figure(figsize=(8, 6))
-    sns.boxplot(x='p_number', y='Duration', data=Drug_see2)
-    plt.axhline(global_median, linestyle='dashed', color='red')
-    plt.yticks(np.arange(0, 350, 100))
-    plt.xlabel("p_number")
-    plt.ylabel("Duration")
-    plt.title("Boxplot of Duration by p_number")
+    sns.boxplot(x='p_number', y='Duration', data=df2)
+    medians_of_medians = df2['Duration'].median()
+    plt.axhline(y=medians_of_medians, color='red', linestyle='--')
+    plt.title("Duration by Prescription Number with Median Line")
+    plt.xlabel("Prescription Number")
+    plt.ylabel("Duration (days)")
     plt.show()
-    
-    return plt
 
-# Generate medA and medB using the See() function
-medA = See("medA")
-medB = See("medB")
+# =============================================================================
+# 7. Example Usage
+# =============================================================================
+medA = see("medA")
+medB = see("medB")
 
-# Run the assumption plots
 see_assumption(medA)
 see_assumption(medB)
