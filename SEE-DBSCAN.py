@@ -26,7 +26,7 @@ tidy['eksd'] = pd.to_datetime(tidy['eksd'], format='%m/%d/%Y')
 
 arg1 = "medA"
 
-def see(med_type, min_samples_dbscan=20, eps_range=np.linspace(0.001, 10.0, 100)):
+def see(med_type, min_samples_dbscan=2, eps_range=np.linspace(0.001, 10.0, 100)):
     # Filter data for the medication type (e.g., "medA")
     data_med = tidy[tidy['ATC'] == med_type].copy()
     drug_see_p0 = data_med.copy()  # Original filtered data
