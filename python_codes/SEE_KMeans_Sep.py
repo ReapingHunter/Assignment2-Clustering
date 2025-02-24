@@ -216,9 +216,9 @@ def see_assumption(df):
 # -------------------------------------------------------------------------
 # Generate medA and medB using the See() function
 # -------------------------------------------------------------------------
-# medA = See("medA")
-# medB = See("medB")
+medA = See("medA")
+medB = See("medB")
 
 # Plot the assumption for medA and medB
-# see_assumption(medA)
-# see_assumption(medB)
+see_assumption(medA)
+see_assumption(medB)

@@ -204,8 +204,8 @@ def see_assumption(df):
     plt.ylabel("Duration (days)")
     plt.show()
 
-# medA = see("medA")
-# medB = see("medB")
+medA = see("medA")
+medB = see("medB")
 
-# see_assumption(medA)
-# see_assumption(medB)
+see_assumption(medA)
+see_assumption(medB)
