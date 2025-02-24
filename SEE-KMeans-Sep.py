@@ -186,7 +186,7 @@ def See(arg1):
     
     kmeans(optimal_k, df_ecdf)
 
-    final_df = cluster_computation(df_ecdf, drug_see_p0, drug_see_p1)
+    final_df = cluster_assignment(df_ecdf, drug_see_p0, drug_see_p1)
 
     return final_df
     
