@@ -117,7 +117,6 @@ def see(med_type, min_samples_dbscan=2, eps_range=np.linspace(0.001, 10.0, 100))
 
     if silhouette_scores:
         best_eps = max(silhouette_scores, key=silhouette_scores.get)
-        print(f"Best eps from silhouette analysis: {best_eps:.3f}")
         # Plot silhouette score vs eps
         eps_vals = list(silhouette_scores.keys())
         scores = list(silhouette_scores.values())
@@ -129,7 +128,6 @@ def see(med_type, min_samples_dbscan=2, eps_range=np.linspace(0.001, 10.0, 100))
         plt.show()
     else:
         best_eps = eps_range[0]
-        print("Silhouette analysis did not yield a valid eps; using default eps =", best_eps)
 
     # =============================================================================
     # 4. DBSCAN Clustering with Chosen eps
