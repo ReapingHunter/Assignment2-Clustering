@@ -116,7 +116,7 @@ def kmeans(optimal_k, df_ecdf):
     km_ecdf = KMeans(n_clusters=optimal_k, random_state=1234)
     df_ecdf['cluster'] = km_ecdf.fit_predict(df_ecdf[['x']])
 
-def cluster_computation(df_ecdf, drug_see_p0, drug_see_p1):
+def cluster_assignment(df_ecdf, drug_see_p0, drug_see_p1):
     # For each cluster, compute the min, max, and median on the log scale then exponentiate
     cluster_stats = (df_ecdf.groupby('cluster')['x']
                      .agg(min_log=lambda x: np.log(x).min(),
