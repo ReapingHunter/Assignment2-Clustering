@@ -65,9 +65,11 @@ def plot_ecdf(df_ecdf_80, df_ecdf):
     plt.show()
 
 def plot_frequency_table(drug_see):
-    event_counts = drug_see['pnr'].value_counts()
+    event_counts = drug_see['pnr'].value_counts().sort_index()
+    xticks = [1, 15, 32, 48, 64, 90, 96]
     plt.figure(figsize=(8, 5))
-    event_counts.plot(kind='bar')
+    plt.bar(event_counts.index, event_counts.values)
+    plt.xticks(xticks)
     plt.xlabel("pnr")
     plt.ylabel("Frequency")
     plt.title("Frequency of pnr (Adjusted)")
@@ -186,7 +188,7 @@ def See(arg1):
     
     kmeans(optimal_k, df_ecdf)
 
-    final_df = cluster_computation(df_ecdf, drug_see_p0, drug_see_p1)
+    final_df = cluster_assignment(df_ecdf, drug_see_p0, drug_see_p1)
 
     return final_df
     
@@ -214,9 +216,9 @@ def see_assumption(df):
 # -------------------------------------------------------------------------
 # Generate medA and medB using the See() function
 # -------------------------------------------------------------------------
-medA = See("medA")
-medB = See("medB")
+# medA = See("medA")
+# medB = See("medB")
 
 # Plot the assumption for medA and medB
-see_assumption(medA)
-see_assumption(medB)
+# see_assumption(medA)
+# see_assumption(medB)
