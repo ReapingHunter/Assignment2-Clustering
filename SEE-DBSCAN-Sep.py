@@ -24,7 +24,123 @@ tidy = ExamplePats.copy()
 tidy.columns = ["pnr", "eksd", "perday", "ATC", "dur_original"]
 tidy['eksd'] = pd.to_datetime(tidy['eksd'], format='%m/%d/%Y')
 
-arg1 = "medA"
+def patient_sampling(drug_see):
+    drug_see_p1 = drug_see.sort_values(['pnr', 'eksd']).copy()
+    drug_see_p1['prev_eksd'] = drug_see_p1.groupby('pnr')['eksd'].shift(1)
+    drug_see_p1 = drug_see_p1.dropna(subset=['prev_eksd']).copy()
+    drug_see_p1 = (drug_see_p1
+                   .groupby('pnr', group_keys=False)
+                   .apply(lambda x: x.sample(1, random_state=1234))
+                   .reset_index(drop=True))
+    drug_see_p1 = drug_see_p1[['pnr', 'eksd', 'prev_eksd']]
+    drug_see_p1['event.interval'] = (drug_see_p1['eksd'] - drug_see_p1['prev_eksd']).dt.days.astype(float)
+
+    return drug_see_p1
+
+def ecdf_computation(drug_see):
+    ecdf_see = ECDF(drug_see['event.interval'].values)
+    x_vals = np.sort(drug_see['event.interval'].values)
+    y_vals = ecdf_see(x_vals)
+
+    df_ecdf = pd.DataFrame({'x': x_vals, 'y': y_vals})
+    df_ecdf_80 = df_ecdf[df_ecdf['y'] <= 0.8]
+    ni = df_ecdf_80['x'].max()
+
+    return df_ecdf_80, df_ecdf, ni
+
+def plot_ecdf(df_ecdf_80, df_ecdf):
+    fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+    axs[0].plot(df_ecdf_80['x'], df_ecdf_80['y'], marker='.', linestyle='none')
+    axs[0].set_title("80% ECDF")
+    axs[0].set_xlabel("Event Interval")
+    axs[0].set_ylabel("ECDF")
+    
+    axs[1].plot(df_ecdf['x'], df_ecdf['y'], marker='.', linestyle='none')
+    axs[1].set_title("100% ECDF")
+    axs[1].set_xlabel("Event Interval")
+    axs[1].set_ylabel("ECDF")
+    plt.show()
+
+def plot_frequency_table(drug_see):
+    event_counts = drug_see['pnr'].value_counts()
+    plt.figure(figsize=(8, 5))
+    event_counts.plot(kind='bar')
+    plt.xlabel("pnr")
+    plt.ylabel("Frequency")
+    plt.title("Frequency of pnr (Adjusted)")
+    plt.show()
+
+def density_estimation(drug_see):
+    log_intervals = np.log(drug_see['event.interval'])
+    kde = gaussian_kde(log_intervals)
+    x_grid = np.linspace(log_intervals.min(), log_intervals.max(), 100)
+    y_kde = kde(x_grid)
+
+    return x_grid, y_kde
+
+def plot_density(x_grid, y_kde):
+    plt.figure(figsize=(8, 5))
+    plt.plot(x_grid, y_kde)
+    plt.title("Density of log(event interval)")
+    plt.xlabel("log(event interval)")
+    plt.ylabel("Density")
+    plt.show()
+
+
+    
+
+def plot_silhouette(silhouette_scores):
+    plt.figure(figsize=(8, 5))
+    plt.plot(list(silhouette_scores.keys()), list(silhouette_scores.values()), marker='o')
+    plt.title("Silhouette Analysis")
+    plt.xlabel("Number of clusters")
+    plt.ylabel("Silhouette Score")
+    plt.show()
+
+def cluster_computation(df_ecdf, drug_see_p0, drug_see_p1):
+    # For each cluster, compute the min, max, and median on the log scale then exponentiate
+    cluster_stats = (df_ecdf.groupby('cluster')['x']
+                     .agg(min_log=lambda x: np.log(x).min(),
+                          max_log=lambda x: np.log(x).max(),
+                          median_log=lambda x: np.log(x).median())
+                     .reset_index())
+    cluster_stats['Minimum'] = np.exp(cluster_stats['min_log'])
+    cluster_stats['Maximum'] = np.exp(cluster_stats['max_log'])
+    cluster_stats['Median'] = np.exp(cluster_stats['median_log'])
+    # (Keep only clusters with a positive median; typically all if intervals > 0)
+    cluster_stats = cluster_stats[cluster_stats['Median'] > 0]
+    
+     # --- Cross join drug_see_p1 with cluster_stats ---
+    drug_see_p1['_key'] = 1
+    cluster_stats['_key'] = 1
+    cross_df = pd.merge(drug_see_p1, cluster_stats, on='_key').drop('_key', axis=1)
+    
+    # For each row, assign Final_cluster if the event interval falls within the cluster’s [Minimum, Maximum]
+    cross_df['Final_cluster'] = cross_df.apply(
+        lambda row: row['cluster'] if (row['event.interval'] >= row['Minimum'] and row['event.interval'] <= row['Maximum'])
+        else np.nan, axis=1)
+    results = cross_df.dropna(subset=['Final_cluster']).copy()
+    # Keep only the needed columns
+    results = results[['pnr', 'Median', 'Final_cluster']]
+
+    # Determine the most common cluster
+    most_common_cluster = results['Final_cluster'].value_counts().idxmax()
+    default_median = cluster_stats.loc[cluster_stats['cluster'] == most_common_cluster, 'Median'].values[0]
+
+    # Merge cluster assignments back into drug_see_p1
+    drug_see_p1 = pd.merge(drug_see_p1, results, on='pnr', how='left')
+    drug_see_p1['Median'] = drug_see_p1['Median'].fillna(default_median)
+    drug_see_p1['Cluster'] = drug_see_p1['Final_cluster'].fillna(0)
+    drug_see_p1['test'] = (drug_see_p1['event.interval'] - drug_see_p1['Median']).round(1)
+    
+    drug_see_p3 = drug_see_p1[['pnr', 'Median', 'Cluster']]
+    
+    # Finally, merge these assignments back into the original filtered data (drug_see_p0)
+    final_df = pd.merge(drug_see_p0, drug_see_p3, on='pnr', how='left')
+    final_df['Median'] = final_df['Median'].fillna(default_median)
+    final_df['Cluster'] = final_df['Cluster'].fillna(0)
+
+    return final_df
 
 def see(med_type, min_samples_dbscan=2, eps_range=np.linspace(0.001, 10.0, 100)):
     # Filter data for the medication type (e.g., "medA")
@@ -138,16 +254,15 @@ def see(med_type, min_samples_dbscan=2, eps_range=np.linspace(0.001, 10.0, 100))
     labels = db.fit_predict(X_scaled)
     dfper['cluster'] = labels  # DBSCAN labels noise as -1
 
-    cluster_stats = (dfper[dfper['cluster'] != -1].groupby('cluster')['x'] # Noise filter
-                     .agg(min_log=lambda x: np.log(x).min(),
-                          max_log=lambda x: np.log(x).max(),
-                          median_log=lambda x: np.log(x).median())
+    cluster_stats = (dfper.groupby('cluster')['x']
+                     .agg(min_log=lambda s: np.log(s).min(),
+                          max_log=lambda s: np.log(s).max(),
+                          median_log=lambda s: np.log(s).median())
                      .reset_index())
     cluster_stats['Minimum'] = np.exp(cluster_stats['min_log'])
     cluster_stats['Maximum'] = np.exp(cluster_stats['max_log'])
     cluster_stats['Median'] = np.exp(cluster_stats['median_log'])
-    # (Keep only clusters with a positive median; typically all if intervals > 0)
-    cluster_stats = cluster_stats[cluster_stats['Median'] > 0]
+    cluster_stats = cluster_stats.rename(columns={'cluster': 'db_cluster'})
 
     # =============================================================================
     # 5. Assign Clusters to Patients via Cross Join
@@ -158,21 +273,28 @@ def see(med_type, min_samples_dbscan=2, eps_range=np.linspace(0.001, 10.0, 100))
 
     # For each row, assign Final_cluster if event.interval falls within the cluster’s [Minimum, Maximum]
     cross_df['Final_cluster'] = cross_df.apply(
-        lambda row: row['cluster'] if (row['event.interval'] >= row['Minimum'] and row['event.interval'] <= row['Maximum'])
+        lambda row: row['db_cluster'] if (row['event.interval'] >= row['Minimum'] and row['event.interval'] <= row['Maximum'])
         else np.nan, axis=1)
     results = cross_df.dropna(subset=['Final_cluster']).copy()
-    results = results[['pnr', 'Median', 'Final_cluster']]
+    results = results[['pnr', 'Median', 'db_cluster']]
 
-    # Determine the most common cluster
-    most_common_cluster = results['Final_cluster'].value_counts().idxmax()
-    default_median = cluster_stats.loc[cluster_stats['cluster'] == most_common_cluster, 'Median'].values[0]
+    # Determine the most common cluster from the results.
+    cluster_counts = results['db_cluster'].value_counts()
+    if not cluster_counts.empty:
+        most_common_cluster = cluster_counts.idxmax()
+    else:
+        most_common_cluster = None
+
+    if most_common_cluster is not None:
+        default_median = cluster_stats.loc[cluster_stats['db_cluster'] == most_common_cluster, 'Median'].iloc[0]
+    else:
+        default_median = np.nan
 
     # Merge cluster assignment back into drug_see_p1.
     drug_see_p1 = pd.merge(drug_see_p1, results, on='pnr', how='left')
     drug_see_p1['Median'] = drug_see_p1['Median'].fillna(default_median)
-    drug_see_p1['Cluster'] = drug_see_p1['Final_cluster'].fillna(0)
+    drug_see_p1['Cluster'] = drug_see_p1['db_cluster'].fillna(0)
     drug_see_p1['test'] = (drug_see_p1['event.interval'] - drug_see_p1['Median']).round(1)
-    
     drug_see_p3 = drug_see_p1[['pnr', 'Median', 'Cluster']]
 
     # Merge the cluster assignments back into the original filtered data.
