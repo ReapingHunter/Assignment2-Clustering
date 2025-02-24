@@ -59,9 +59,11 @@ def plot_ecdf(df_ecdf_80, df_ecdf):
     plt.show()
 
 def plot_frequency_table(drug_see):
-    event_counts = drug_see['pnr'].value_counts()
+    event_counts = drug_see['pnr'].value_counts().sort_index()
+    xticks = [1, 15, 32, 48, 64, 90, 96]
     plt.figure(figsize=(8, 5))
-    event_counts.plot(kind='bar')
+    plt.bar(event_counts.index, event_counts.values)
+    plt.xticks(xticks)
     plt.xlabel("pnr")
     plt.ylabel("Frequency")
     plt.title("Frequency of pnr (Adjusted)")
@@ -202,8 +204,8 @@ def see_assumption(df):
     plt.ylabel("Duration (days)")
     plt.show()
 
-medA = see("medA")
-medB = see("medB")
+# medA = see("medA")
+# medB = see("medB")
 
-see_assumption(medA)
-see_assumption(medB)
+# see_assumption(medA)
+# see_assumption(medB)
